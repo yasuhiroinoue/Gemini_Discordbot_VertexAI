@@ -1,0 +1,6 @@
+
+aiohttp
+discord.py
+python-dotenv
+Pillow
+google-cloud-aiplatform
