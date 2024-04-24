@@ -19,7 +19,6 @@ GCP_REGION = os.getenv("GCP_REGION")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 # The history is counted by the number of pairs of exchanges between the user and the assistant.
-MAX_HISTORY = 2*int(os.getenv("MAX_HISTORY", "0"))  # Default to 0 if not set
 
 # The maximum number of characters per Discord message
 MAX_DISCORD_LENGTH = 2000
