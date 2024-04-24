@@ -18,9 +18,11 @@ load_dotenv()
 GCP_REGION = os.getenv("GCP_REGION")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-MAX_HISTORY = int(os.getenv("MAX_HISTORY"))
+# The history is counted by the number of pairs of exchanges between the user and the assistant.
+MAX_HISTORY = 2*int(os.getenv("MAX_HISTORY", "0"))  # Default to 0 if not set
 
-
+# The maximum number of characters per Discord message
+MAX_DISCORD_LENGTH = 2000
 #---------------------------------------------AI Configuration-------------------------------------------------
 
 # Configure the generative AI model
@@ -46,8 +48,9 @@ safety_config = {
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_REGION)
 
 # Load the model
-text_model = generative_models.GenerativeModel("gemini-pro")
-image_model = generative_models.GenerativeModel("gemini-1.0-pro-vision")
+MODEL_ID="gemini-1.5-pro-preview-0409"
+text_model = generative_models.GenerativeModel(MODEL_ID)
+image_model = generative_models.GenerativeModel(MODEL_ID)
 
 
 #---------------------------------------------Discord Code-------------------------------------------------
@@ -91,43 +94,39 @@ async def process_attachments(message, cleaned_text):
                     if resp.status != 200:
                         await message.channel.send('Unable to download the image.')
                         return
-                    if MAX_HISTORY == 0:
-                        image_data = await resp.read()
-                        resized_image_stream = resize_image_if_needed(image_data, file_extension)
-                        resized_image_data = resized_image_stream.getvalue()
-                        encoded_image_data = base64.b64encode(resized_image_data).decode("utf-8")
-                        response_text = await generate_response_with_image_and_text(encoded_image_data, cleaned_text, mime_type)
-                        await split_and_send_messages(message, response_text, 1700)
-                        return
-                    update_message_history(message.author.id, cleaned_text, "user")
-                    formatted_history = get_formatted_message_history(message.author.id)
+                    # Don't keep a record of image-based communication.
                     image_data = await resp.read()
                     resized_image_stream = resize_image_if_needed(image_data, file_extension)
                     resized_image_data = resized_image_stream.getvalue()
                     encoded_image_data = base64.b64encode(resized_image_data).decode("utf-8")
-                    response_text = await generate_response_with_image_and_text(encoded_image_data, formatted_history, mime_type)
-                    update_message_history(message.author.id, response_text, "model")
-                    await split_and_send_messages(message, response_text, 1700)
+                    response_text = await generate_response_with_image_and_text(encoded_image_data, cleaned_text, mime_type)
+                    await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
+                    return
+                    # update_message_history(message.author.id, cleaned_text, "user")
+                    # formatted_history = get_formatted_message_history(message.author.id)
+                    # image_data = await resp.read()
+                    # resized_image_stream = resize_image_if_needed(image_data, file_extension)
+                    # resized_image_data = resized_image_stream.getvalue()
+                    # encoded_image_data = base64.b64encode(resized_image_data).decode("utf-8")
+                    # response_text = await generate_response_with_image_and_text(encoded_image_data, formatted_history, mime_type)
+                    # update_message_history(message.author.id, response_text, "model")
+                    # await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
         else:
             supported_extensions = ', '.join(ext_to_mime.keys())
             await message.channel.send(f"🗑️ Unsupported file extension. Supported extensions are: {supported_extensions}")
 
 async def process_text_message(message, cleaned_text):
     print(f"New Message FROM: {message.author.id}: {cleaned_text}")
-    if "RESET" in cleaned_text.upper():
+    if re.search(r'^RESET$', cleaned_text, re.IGNORECASE):
         message_history.pop(message.author.id, None)
         await message.channel.send(f"🧹 History Reset for user: {message.author.name}")
         return
     await message.add_reaction('💬')
-    if MAX_HISTORY == 0:
-        response_text = await generate_response_with_text(cleaned_text)
-        await split_and_send_messages(message, response_text, 1700)
-        return
     update_message_history(message.author.id, cleaned_text, "user")
     formatted_history = get_formatted_message_history(message.author.id)
     response_text = await generate_response_with_text(formatted_history)
     update_message_history(message.author.id, response_text, "model")
-    await split_and_send_messages(message, response_text, 1700)
+    await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
 
 #---------------------------------------------AI Generation History-------------------------------------------------
 
@@ -147,15 +146,16 @@ async def generate_response_with_image_and_text(image_data, text, _mime_type):
     return response.text
 
 #---------------------------------------------Message History-------------------------------------------------
-
 def update_message_history(user_id, text, message_type):
     # prefixed_message = f"{message_type}: {text}"
     # Construct the new message as a dictionary
     new_message = {'role': message_type, 'parts': [text]}
     if user_id in message_history:
         message_history[user_id].append(new_message)
-        if len(message_history[user_id]) > MAX_HISTORY:
+        if message_type == 'model' and len(message_history[user_id]) > MAX_HISTORY:
             message_history[user_id].pop(0)
+            if len(message_history[user_id]) > 0:
+                message_history[user_id].pop(0)
     else:
         message_history[user_id] = [new_message]
 
@@ -192,8 +192,36 @@ def resize_image_if_needed(image_bytes, file_extension, max_size_mb=3, step=10):
     return img_stream
 
 async def split_and_send_messages(message_system, text, max_length):
-    for i in range(0, len(text), max_length):
-        await message_system.channel.send(text[i:i+max_length])
+    """
+    Splits the given text into chunks that respect word boundaries and sends them
+    using the provided message system. Chunks are up to max_length characters long.
+
+    :param message_system: An object representing the Discord messaging system,
+                           assumed to have a `channel.send` method for sending messages.
+    :param text: The text to be sent.
+    :param max_length: The maximum length of each message chunk.
+    """
+    start = 0
+    while start < len(text):
+        # If remaining text is within the max_length, send it as one chunk.
+        if len(text) - start <= max_length:
+            await message_system.channel.send(text[start:])
+            break
+
+        # Find the last whitespace character before the max_length limit.
+        end = start + max_length
+        while end > start and text[end-1] not in ' \n\r\t':
+            end -= 1
+
+        # If no suitable whitespace is found, force break at max_length.
+        if end == start:
+            end = start + max_length
+
+        # Send the text from start to end.
+        await message_system.channel.send(text[start:end].strip())
+        
+        # Update start position for next iteration to continue after the last whitespace.
+        start = end
 
 # Run the bot
 bot.run(DISCORD_BOT_TOKEN)
