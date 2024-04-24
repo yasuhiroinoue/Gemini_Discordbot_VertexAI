@@ -124,6 +124,7 @@ async def process_text_message(message, cleaned_text):
 
 
 async def generate_response_with_text(message,cleaned_text):
+    global chat
     user_id = message.author.id
 
     # Get or create chat session
