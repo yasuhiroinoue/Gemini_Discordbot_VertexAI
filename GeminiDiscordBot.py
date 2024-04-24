@@ -12,7 +12,7 @@ import vertexai
 from vertexai import generative_models
 from vertexai.generative_models import Part
 
-message_history = {}
+chat = {}
 
 load_dotenv()
 GCP_REGION = os.getenv("GCP_REGION")
@@ -27,9 +27,9 @@ MAX_DISCORD_LENGTH = 2000
 
 # Configure the generative AI model
 text_generation_config = {
-    "temperature": 0.9,
-    "top_p": 1,
-    "top_k": 1,
+    "temperature": 1,
+    "top_p": 0.95,
+    # "top_k": 1,
     "max_output_tokens": 8192,
 }
 image_generation_config = {
@@ -40,8 +40,8 @@ image_generation_config = {
 }
 
 safety_config = {
-        generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+        generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
 }
 
 # Initialize Vertex AI
@@ -49,9 +49,8 @@ vertexai.init(project=GCP_PROJECT_ID, location=GCP_REGION)
 
 # Load the model
 MODEL_ID="gemini-1.5-pro-preview-0409"
-text_model = generative_models.GenerativeModel(MODEL_ID)
 image_model = generative_models.GenerativeModel(MODEL_ID)
-
+chat_model =  generative_models.GenerativeModel(model_name=MODEL_ID, generation_config=text_generation_config,safety_settings=safety_config,)
 
 #---------------------------------------------Discord Code-------------------------------------------------
 # Initialize Discord bot
@@ -102,39 +101,41 @@ async def process_attachments(message, cleaned_text):
                     response_text = await generate_response_with_image_and_text(encoded_image_data, cleaned_text, mime_type)
                     await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
                     return
-                    # update_message_history(message.author.id, cleaned_text, "user")
-                    # formatted_history = get_formatted_message_history(message.author.id)
-                    # image_data = await resp.read()
-                    # resized_image_stream = resize_image_if_needed(image_data, file_extension)
-                    # resized_image_data = resized_image_stream.getvalue()
-                    # encoded_image_data = base64.b64encode(resized_image_data).decode("utf-8")
-                    # response_text = await generate_response_with_image_and_text(encoded_image_data, formatted_history, mime_type)
-                    # update_message_history(message.author.id, response_text, "model")
-                    # await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
         else:
             supported_extensions = ', '.join(ext_to_mime.keys())
             await message.channel.send(f"🗑️ Unsupported file extension. Supported extensions are: {supported_extensions}")
 
 async def process_text_message(message, cleaned_text):
+    """Processes a text message and generates a response using a chat model."""
+    
     print(f"New Message FROM: {message.author.id}: {cleaned_text}")
+
+    # Handle reset command
     if re.search(r'^RESET$', cleaned_text, re.IGNORECASE):
-        message_history.pop(message.author.id, None)
+        chat.pop(message.author.id, None)
         await message.channel.send(f"🧹 History Reset for user: {message.author.name}")
         return
+
     await message.add_reaction('💬')
-    update_message_history(message.author.id, cleaned_text, "user")
-    formatted_history = get_formatted_message_history(message.author.id)
-    response_text = await generate_response_with_text(formatted_history)
-    update_message_history(message.author.id, response_text, "model")
+
+    # Send response, splitting if necessary
+    response_text = await generate_response_with_text(message,cleaned_text)
     await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
 
-#---------------------------------------------AI Generation History-------------------------------------------------
 
-async def generate_response_with_text(message_text):
-    prompt_parts = [message_text]
-    print("Got textPrompt: " + message_text)
-    response = text_model.generate_content(prompt_parts,generation_config=text_generation_config,safety_settings=safety_config,)
-    return response.text
+async def generate_response_with_text(message,cleaned_text):
+    user_id = message.author.id
+
+    # Get or create chat session
+    chat_session = chat.get(user_id)
+    if not chat_session:
+        chat_session = chat_model.start_chat()
+        chat[user_id] = chat_session
+    
+    # Generate response
+    answer = chat_session.send_message(cleaned_text)
+    response_text = answer.candidates[0].content.parts[0].text
+    return response_text
 
 async def generate_response_with_image_and_text(image_data, text, _mime_type):
     # Construct image and text parts with Part class
@@ -144,36 +145,6 @@ async def generate_response_with_image_and_text(image_data, text, _mime_type):
     prompt_parts = [image_part, text_part]
     response = image_model.generate_content(prompt_parts,generation_config=image_generation_config,safety_settings=safety_config,)
     return response.text
-
-#---------------------------------------------Message History-------------------------------------------------
-def update_message_history(user_id, text, message_type):
-    # prefixed_message = f"{message_type}: {text}"
-    # Construct the new message as a dictionary
-    new_message = {'role': message_type, 'parts': [text]}
-    if user_id in message_history:
-        message_history[user_id].append(new_message)
-        if message_type == 'model' and len(message_history[user_id]) > MAX_HISTORY:
-            message_history[user_id].pop(0)
-            if len(message_history[user_id]) > 0:
-                message_history[user_id].pop(0)
-    else:
-        message_history[user_id] = [new_message]
-
-def get_formatted_message_history(user_id):
-    # Check if the user has any messages
-    if user_id not in message_history or not message_history[user_id]:
-        return "No messages found for this user."
-    
-    # Format each message in the history
-    formatted_messages = []
-    for message in message_history[user_id]:
-        role = message['role']
-        text = " ".join(message['parts'])  # Assuming 'parts' is a list of strings
-        formatted_message = f"{role}: {text}"
-        formatted_messages.append(formatted_message)
-    
-    # Join the formatted messages with double newlines
-    return '\n\n'.join(formatted_messages)
 
 def clean_discord_message(input_string):
     bracket_pattern = re.compile(r'<[^>]+>')
