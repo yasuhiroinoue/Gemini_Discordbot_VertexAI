@@ -26,7 +26,6 @@ To run this project, you must add the following environment variables to your .e
 - `GCP_REGION` - Your Google Cloud Platform region
 - `GCP_PROJECT_ID` - Your Google Cloud Platform project ID
 - `DISCORD_BOT_TOKEN` - Your Discord Bot Token
-- `MAX_HISTORY` - The maximum number of messages to remember for generating context-aware responses
 
 ## Running the Bot
 To run the bot, use the following command:
