@@ -2,6 +2,7 @@
 import os
 import re
 import aiohttp
+import asyncio
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -104,6 +105,18 @@ async def process_attachments(message, cleaned_text):
             supported_extensions = ', '.join(ext_to_mime.keys())
             await message.channel.send(f"🗑️ Unsupported file extension. Supported extensions are: {supported_extensions}")
 
+async def async_send_message(chat_session, text):
+    loop = asyncio.get_running_loop()
+
+    try:
+        # ThreadPoolExecutorを使用して、非同期で同期関数を実行
+        response = await loop.run_in_executor(None, chat_session.send_message, text)
+        return response
+    except Exception as e:
+        # エラーが発生した場合の処理
+        print(f"Error sending message: {e}")
+        # エラーに基づいた適切なレスポンスを返すか、Noneを返して呼び出し元で処理する
+        return None
 async def process_text_message(message, cleaned_text):
     """Processes a text message and generates a response using a chat model."""
     
@@ -121,8 +134,7 @@ async def process_text_message(message, cleaned_text):
     response_text = await generate_response_with_text(message,cleaned_text)
     await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
 
-
-async def generate_response_with_text(message,cleaned_text):
+async def generate_response_with_text(message, cleaned_text):
     global chat
     user_id = message.author.id
 
@@ -132,10 +144,17 @@ async def generate_response_with_text(message,cleaned_text):
         chat_session = chat_model.start_chat()
         chat[user_id] = chat_session
     
-    # Generate response
-    answer = chat_session.send_message(cleaned_text)
-    response_text = answer.candidates[0].content.parts[0].text
-    return response_text
+    try:
+        # Generate response using the asynchronous send_message function
+        answer = await async_send_message(chat_session, cleaned_text)
+        if answer.candidates and answer.candidates[0].content.parts:
+            return answer.candidates[0].content.parts[0].text
+        else:
+            return "No valid response received."
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return "An error occurred while generating the response."
+
 
 async def generate_response_with_image_and_text(image_data, text, _mime_type):
     # Construct image and text parts with Part class
