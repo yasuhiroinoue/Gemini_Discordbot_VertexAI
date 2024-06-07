@@ -48,7 +48,8 @@ safety_config = {
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_REGION)
 
 # Load the model
-MODEL_ID="gemini-1.5-pro-preview-0409"
+# MODEL_ID="gemini-1.5-pro-preview-0409"
+MODEL_ID="gemini-1.5-pro-001"
 image_model = generative_models.GenerativeModel(MODEL_ID)
 chat_model =  generative_models.GenerativeModel(model_name=MODEL_ID, generation_config=text_generation_config,safety_settings=safety_config,)
 
