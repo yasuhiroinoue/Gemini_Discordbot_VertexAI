@@ -32,7 +32,7 @@ The bot now supports a wide range of text-based file formats, including but not 
   - Swift: `.swift`
   - R: `.R`, `.r`
   - Go: `.go`
-  - 
+  
 ## Prerequisites
 - Python 3.8 or newer
 - Discord Bot Token
