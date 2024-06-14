@@ -10,7 +10,7 @@ This project is a Discord Bot that utilizes Google VertexAI to call upon Gemini 
 - Easy to set up and deploy on any server
 
 ## Supported File Extensions
-The bot supports a wide range of file formats, including text-based documents, data files, source code, PDFs, and images.
+The bot supports a wide range of file formats, including text-based documents, data files, source code, PDFs, images, audio, and video.
 
 ## Prerequisites
 - Python 3.8 or newer
