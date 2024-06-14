@@ -220,7 +220,7 @@ async def generate_response_with_text(message, cleaned_text):
 async def generate_response_with_image_and_text(image_data, text, _mime_type):
     # Construct image and text parts with Part class
     image_part = Part.from_data(data=image_data, mime_type=_mime_type)
-    text_part = Part.from_text(text=f"\n{text if text else 'You are a very professional document summarization specialist. Please summarize the given document.'}")
+    text_part = Part.from_text(text=f"\n{text if text else 'What is this a picture of?'}")
     # Stored in list as prompt
     prompt_parts = [image_part, text_part]
     response = image_model.generate_content(prompt_parts,generation_config=image_generation_config,safety_settings=safety_config,)
@@ -229,7 +229,7 @@ async def generate_response_with_image_and_text(image_data, text, _mime_type):
 async def generate_response_with_pdf_and_text(pdf_data, text, _mime_type):
     # Construct image and text parts with Part class
     pdf_part = Part.from_data(data=pdf_data, mime_type=_mime_type)
-    text_part = Part.from_text(text=f"\n{text if text else 'What is this a picture of?'}")
+    text_part = Part.from_text(text=f"\n{text if text else 'You are a very professional document summarization specialist. Please summarize the given document.'}")
     # Stored in list as prompt
     prompt_parts = [pdf_part, text_part]
     response = pdf_model.generate_content(prompt_parts,generation_config=image_generation_config,safety_settings=safety_config,)
