@@ -52,6 +52,7 @@ vertexai.init(project=GCP_PROJECT_ID, location=GCP_REGION)
 
 # Load the model
 image_model = generative_models.GenerativeModel(MODEL_ID)
+pdf_model = generative_models.GenerativeModel(MODEL_ID)
 chat_model =  generative_models.GenerativeModel(model_name=MODEL_ID, generation_config=text_generation_config,safety_settings=safety_config,)
 
 #---------------------------------------------Discord Code-------------------------------------------------
@@ -91,6 +92,7 @@ async def process_attachments(message, cleaned_text):
             '.jpeg': "image/jpeg", 
             '.gif': "image/gif", 
             '.webp': "image/webp",
+            '.pdf': "application/pdf",
             '.txt': "text/plain",
             '.md': "text/markdown",
             '.csv': "text/csv",
@@ -132,6 +134,18 @@ async def process_attachments(message, cleaned_text):
                         resized_image_data = resized_image_stream.getvalue()
                         encoded_image_data = base64.b64encode(resized_image_data).decode("utf-8")
                         response_text = await generate_response_with_image_and_text(encoded_image_data, cleaned_text, mime_type)
+                        await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
+                        return
+            elif file_extension in ['.pdf']:
+                await message.add_reaction('📄')
+                mime_type = ext_to_mime[file_extension]
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(attachment.url) as resp:
+                        if resp.status != 200:
+                            await message.channel.send('Unable to download the pdf.')
+                            return
+                        pdf_file = await resp.read()
+                        response_text = await generate_response_with_pdf_and_text(pdf_file, cleaned_text, mime_type)
                         await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
                         return
             else:
@@ -206,11 +220,21 @@ async def generate_response_with_text(message, cleaned_text):
 async def generate_response_with_image_and_text(image_data, text, _mime_type):
     # Construct image and text parts with Part class
     image_part = Part.from_data(data=image_data, mime_type=_mime_type)
-    text_part = Part.from_text(text=f"\n{text if text else 'What is this a picture of?'}")
+    text_part = Part.from_text(text=f"\n{text if text else 'You are a very professional document summarization specialist. Please summarize the given document.'}")
     # Stored in list as prompt
     prompt_parts = [image_part, text_part]
     response = image_model.generate_content(prompt_parts,generation_config=image_generation_config,safety_settings=safety_config,)
     return response.text
+
+async def generate_response_with_pdf_and_text(pdf_data, text, _mime_type):
+    # Construct image and text parts with Part class
+    pdf_part = Part.from_data(data=pdf_data, mime_type=_mime_type)
+    text_part = Part.from_text(text=f"\n{text if text else 'What is this a picture of?'}")
+    # Stored in list as prompt
+    prompt_parts = [pdf_part, text_part]
+    response = pdf_model.generate_content(prompt_parts,generation_config=image_generation_config,safety_settings=safety_config,)
+    return response.text
+
 
 def clean_discord_message(input_string):
     bracket_pattern = re.compile(r'<[^>]+>')
