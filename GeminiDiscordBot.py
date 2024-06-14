@@ -32,8 +32,8 @@ text_generation_config = {
 }
 
 safety_config = {
-        generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
-        generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
+        generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_ONLY_HIGH,
 }
 
 # Initialize Vertex AI
@@ -92,7 +92,8 @@ async def process_attachments(message, cleaned_text):
                     file_data = await resp.read()
                     
                     mime_type = get_mime_type_from_bytes(file_data)
-                    print(mime_type)
+                    # For debug
+                    # print(mime_type)
                     response_text = await generate_response_with_file_and_text(message, file_data, cleaned_text, mime_type)
                     await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
                     return
