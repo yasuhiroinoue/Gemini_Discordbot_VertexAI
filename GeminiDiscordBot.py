@@ -32,12 +32,6 @@ text_generation_config = {
     # "top_k": 1,
     "max_output_tokens": 8192,
 }
-image_generation_config = {
-    "temperature": 0.4,
-    "top_p": 1,
-    "top_k": 32,
-    "max_output_tokens": 2048,
-}
 
 safety_config = {
         generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_NONE,
@@ -51,8 +45,6 @@ MODEL_ID="gemini-1.5-pro-001"
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_REGION)
 
 # Load the model
-image_model = generative_models.GenerativeModel(MODEL_ID)
-pdf_model = generative_models.GenerativeModel(MODEL_ID)
 chat_model =  generative_models.GenerativeModel(model_name=MODEL_ID, generation_config=text_generation_config,safety_settings=safety_config,)
 
 #---------------------------------------------Discord Code-------------------------------------------------
@@ -133,7 +125,7 @@ async def process_attachments(message, cleaned_text):
                         resized_image_stream = resize_image_if_needed(image_data, file_extension)
                         resized_image_data = resized_image_stream.getvalue()
                         encoded_image_data = base64.b64encode(resized_image_data).decode("utf-8")
-                        response_text = await generate_response_with_image_and_text(encoded_image_data, cleaned_text, mime_type)
+                        response_text = await generate_response_with_image_and_text(message, encoded_image_data, cleaned_text, mime_type)
                         await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
                         return
             elif file_extension in ['.pdf']:
@@ -145,7 +137,7 @@ async def process_attachments(message, cleaned_text):
                             await message.channel.send('Unable to download the pdf.')
                             return
                         pdf_file = await resp.read()
-                        response_text = await generate_response_with_pdf_and_text(pdf_file, cleaned_text, mime_type)
+                        response_text = await generate_response_with_pdf_and_text(message, pdf_file, cleaned_text, mime_type)
                         await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
                         return
             else:
@@ -164,12 +156,12 @@ async def process_attachments(message, cleaned_text):
             supported_extensions = ', '.join(ext_to_mime.keys())
             await message.channel.send(f"🗑️ Unsupported file extension. Supported extensions are: {supported_extensions}")
 
-async def async_send_message(chat_session, text):
+async def async_send_message(chat_session, prompt):
     loop = asyncio.get_running_loop()
 
     try:
         # ThreadPoolExecutorを使用して、非同期で同期関数を実行
-        response = await loop.run_in_executor(None, chat_session.send_message, text)
+        response = await loop.run_in_executor(None, chat_session.send_message, prompt)
         return response
     except Exception as e:
         # エラーが発生した場合の処理
@@ -216,24 +208,61 @@ async def generate_response_with_text(message, cleaned_text):
         print(f"An error occurred: {e}")
         return "An error occurred while generating the response."
 
-
-async def generate_response_with_image_and_text(image_data, text, _mime_type):
+async def generate_response_with_image_and_text(message, image_data, text, _mime_type):
     # Construct image and text parts with Part class
     image_part = Part.from_data(data=image_data, mime_type=_mime_type)
     text_part = Part.from_text(text=f"\n{text if text else 'What is this a picture of?'}")
     # Stored in list as prompt
     prompt_parts = [image_part, text_part]
-    response = image_model.generate_content(prompt_parts,generation_config=image_generation_config,safety_settings=safety_config,)
-    return response.text
 
-async def generate_response_with_pdf_and_text(pdf_data, text, _mime_type):
+    global chat
+    user_id = message.author.id
+
+    # Get or create chat session
+    chat_session = chat.get(user_id)
+    if not chat_session:
+        chat_session = chat_model.start_chat()
+        chat[user_id] = chat_session
+    
+    try:
+        # Generate response using the asynchronous send_message function
+        answer = await async_send_message(chat_session, prompt_parts)
+        if answer.candidates and answer.candidates[0].content.parts:
+            return answer.candidates[0].content.parts[0].text
+        else:
+            return "No valid response received."
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return "An error occurred while generating the response."
+
+
+async def generate_response_with_pdf_and_text(message, pdf_data, text, _mime_type):
     # Construct image and text parts with Part class
     pdf_part = Part.from_data(data=pdf_data, mime_type=_mime_type)
     text_part = Part.from_text(text=f"\n{text if text else 'You are a very professional document summarization specialist. Please summarize the given document.'}")
     # Stored in list as prompt
     prompt_parts = [pdf_part, text_part]
-    response = pdf_model.generate_content(prompt_parts,generation_config=image_generation_config,safety_settings=safety_config,)
-    return response.text
+
+    global chat
+    user_id = message.author.id
+
+    # Get or create chat session
+    chat_session = chat.get(user_id)
+    if not chat_session:
+        chat_session = chat_model.start_chat()
+        chat[user_id] = chat_session
+    
+    try:
+        # Generate response using the asynchronous send_message function
+        answer = await async_send_message(chat_session, prompt_parts)
+        if answer.candidates and answer.candidates[0].content.parts:
+            return answer.candidates[0].content.parts[0].text
+        else:
+            return "No valid response received."
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return "An error occurred while generating the response."
+
 
 
 def clean_discord_message(input_string):
