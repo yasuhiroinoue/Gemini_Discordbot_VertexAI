@@ -3,12 +3,10 @@ import os
 import re
 import aiohttp
 import asyncio
+import magic
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-from PIL import Image
-import io
-import base64
 import vertexai
 from vertexai import generative_models
 from vertexai.generative_models import Part
@@ -75,88 +73,36 @@ async def on_message(message):
             else:
                 await process_text_message(message, cleaned_text)
 
+
+def get_mime_type_from_bytes(byte_data):
+    mime = magic.Magic(mime=True)
+    mime_type = mime.from_buffer(byte_data)
+   
+    return mime_type
+
 async def process_attachments(message, cleaned_text):
     for attachment in message.attachments:
-        file_extension = os.path.splitext(attachment.filename.lower())[1]
-        ext_to_mime = {
-            '.png': "image/png", 
-            '.jpg': "image/jpeg", 
-            '.jpeg': "image/jpeg", 
-            '.gif': "image/gif", 
-            '.webp': "image/webp",
-            '.pdf': "application/pdf",
-            '.txt': "text/plain",
-            '.md': "text/markdown",
-            '.csv': "text/csv",
-            '.json': "application/json",
-            '.xml': "application/xml",
-            '.html': "text/html",
-            '.ini': "text/plain",
-            '.log': "text/plain",
-            '.yaml': "text/yaml",
-            '.yml': "text/yaml",
-            '.c': "text/x-c",
-            '.h': "text/x-c",
-            '.cpp': "text/x-c++",
-            '.hpp': "text/x-c++",
-            '.py': "text/x-python",
-            '.rs': "text/x-rust",
-            '.js': "text/javascript",
-            '.cs': "text/x-csharp",
-            '.php': "text/x-php",
-            '.rb': "text/x-ruby",
-            '.pl': "text/x-perl",
-            '.pm': "text/x-perl",
-            '.swift': "text/x-swift",
-            '.r': "text/x-r",
-            '.R': "text/x-r",
-            '.go': "text/x-go"
-        }
-        if file_extension in ext_to_mime:
-            if file_extension in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
-                await message.add_reaction('🎨')
-                mime_type = ext_to_mime[file_extension]
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(attachment.url) as resp:
-                        if resp.status != 200:
-                            await message.channel.send('Unable to download the image.')
-                            return
-                        image_data = await resp.read()
-                        resized_image_stream = resize_image_if_needed(image_data, file_extension)
-                        resized_image_data = resized_image_stream.getvalue()
-                        encoded_image_data = base64.b64encode(resized_image_data).decode("utf-8")
-                        response_text = await generate_response_with_image_and_text(message, encoded_image_data, cleaned_text, mime_type)
-                        await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
+        await message.add_reaction('📄')
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(attachment.url) as resp:
+                    if resp.status != 200:
+                        await message.channel.send('Unable to download the file.')
                         return
-            elif file_extension in ['.pdf']:
-                await message.add_reaction('📄')
-                mime_type = ext_to_mime[file_extension]
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(attachment.url) as resp:
-                        if resp.status != 200:
-                            await message.channel.send('Unable to download the pdf.')
-                            return
-                        pdf_file = await resp.read()
-                        response_text = await generate_response_with_pdf_and_text(message, pdf_file, cleaned_text, mime_type)
-                        await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
-                        return
-            else:
-                await message.add_reaction('📄')
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(attachment.url) as resp:
-                        if resp.status != 200:
-                            await message.channel.send('Unable to download the text file.')
-                            return
-                        text_data = await resp.text()
-                        # cleaned_textが空でない場合のみテキストに追加
-                        combined_text = f"{cleaned_text}\n{text_data}" if cleaned_text else text_data
-                        await process_text_message(message, combined_text)
-                        return
-        else:
-            supported_extensions = ', '.join(ext_to_mime.keys())
-            await message.channel.send(f"🗑️ Unsupported file extension. Supported extensions are: {supported_extensions}")
+                    file_data = await resp.read()
+                    
+                    mime_type = get_mime_type_from_bytes(file_data)
+                    print(mime_type)
+                    response_text = await generate_response_with_file_and_text(message, file_data, cleaned_text, mime_type)
+                    await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
+                    return
+        except aiohttp.ClientError as e:
+            await message.channel.send(f'Failed to download the file: {e}')
+        except Exception as e:
+            await message.channel.send(f'An unexpected error occurred: {e}')
 
-async def async_send_message(chat_session, prompt):
+
+async def async_send_message(chat_session, prompt): 
     loop = asyncio.get_running_loop()
 
     try:
@@ -208,12 +154,12 @@ async def generate_response_with_text(message, cleaned_text):
         print(f"An error occurred: {e}")
         return "An error occurred while generating the response."
 
-async def generate_response_with_image_and_text(message, image_data, text, _mime_type):
+async def generate_response_with_file_and_text(message, file, text, _mime_type):
     # Construct image and text parts with Part class
-    image_part = Part.from_data(data=image_data, mime_type=_mime_type)
-    text_part = Part.from_text(text=f"\n{text if text else 'What is this a picture of?'}")
+    file_part = Part.from_data(data=file, mime_type=_mime_type)
+    text_part = Part.from_text(text=f"\n{text if text else 'What is this?'}")
     # Stored in list as prompt
-    prompt_parts = [image_part, text_part]
+    prompt_parts = [file_part, text_part]
 
     global chat
     user_id = message.author.id
@@ -234,52 +180,10 @@ async def generate_response_with_image_and_text(message, image_data, text, _mime
     except Exception as e:
         print(f"An error occurred: {e}")
         return "An error occurred while generating the response."
-
-
-async def generate_response_with_pdf_and_text(message, pdf_data, text, _mime_type):
-    # Construct image and text parts with Part class
-    pdf_part = Part.from_data(data=pdf_data, mime_type=_mime_type)
-    text_part = Part.from_text(text=f"\n{text if text else 'You are a very professional document summarization specialist. Please summarize the given document.'}")
-    # Stored in list as prompt
-    prompt_parts = [pdf_part, text_part]
-
-    global chat
-    user_id = message.author.id
-
-    # Get or create chat session
-    chat_session = chat.get(user_id)
-    if not chat_session:
-        chat_session = chat_model.start_chat()
-        chat[user_id] = chat_session
-    
-    try:
-        # Generate response using the asynchronous send_message function
-        answer = await async_send_message(chat_session, prompt_parts)
-        if answer.candidates and answer.candidates[0].content.parts:
-            return answer.candidates[0].content.parts[0].text
-        else:
-            return "No valid response received."
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return "An error occurred while generating the response."
-
-
 
 def clean_discord_message(input_string):
     bracket_pattern = re.compile(r'<[^>]+>')
     return bracket_pattern.sub('', input_string)
-
-def resize_image_if_needed(image_bytes, file_extension, max_size_mb=3, step=10):
-    format_map = {'.png': 'PNG', '.jpg': 'JPEG', '.jpeg': 'JPEG', '.gif': 'GIF', '.webp': 'WEBP'}
-    img_format = format_map.get(file_extension.lower(), 'JPEG')
-    img_stream = io.BytesIO(image_bytes)
-    img = Image.open(img_stream)
-    while img_stream.getbuffer().nbytes > max_size_mb * 1024 * 1024:
-        width, height = img.size
-        img = img.resize((int(width * (100 - step) / 100), int(height * (100 - step) / 100)), Image.ANTIALIAS)
-        img_stream = io.BytesIO()
-        img.save(img_stream, format=img_format)
-    return img_stream
 
 async def split_and_send_messages(message_system, text, max_length):
     """
