@@ -11,7 +11,7 @@ This bot can also process text files exceeding Discord's message length limit, m
 - Accepts file input for processing text beyond Discord's character limit, such as source code.
 - Customizable through environment variables
 - Easy to set up and deploy on any server
-- Automatically remembers conversation history, including file inputs, to provide context for future interactions.
+- Automatically remembers conversation history **per Discord user**, including file inputs, to provide context for future interactions.
 - Use the reset command to clear the conversation history. Case insensitive.
 
 
