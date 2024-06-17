@@ -62,7 +62,7 @@ async def on_message(message):
         return
 
     if message.mention_everyone:
-        await message.channel.send(f'{bot.user}です')
+        await message.channel.send(f'This is {bot.user}')
         return
 
     if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
@@ -107,13 +107,13 @@ async def async_send_message(chat_session, prompt):
     loop = asyncio.get_running_loop()
 
     try:
-        # ThreadPoolExecutorを使用して、非同期で同期関数を実行
+        # Use ThreadPoolExecutor to run synchronous function asynchronously
         response = await loop.run_in_executor(None, chat_session.send_message, prompt)
         return response
     except Exception as e:
-        # エラーが発生した場合の処理
+        # Handle any exceptions that occur
         print(f"Error sending message: {e}")
-        # エラーに基づいた適切なレスポンスを返すか、Noneを返して呼び出し元で処理する
+        # Return an appropriate response based on the error, or None to let the caller handle it
         return None
     
 async def process_text_message(message, cleaned_text):
