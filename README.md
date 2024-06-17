@@ -66,7 +66,7 @@ python GeminiDiscordBot.py
 ```
 
 ### 2. Reset Conversation History (Within Discord)
-Want to give the bot a fresh start?  Send this command in a Discord channel where the bot is active:
+Want to start a fresh conversation? Send this command in a Discord channel where the bot is active:
 ```
 reset
 ```
