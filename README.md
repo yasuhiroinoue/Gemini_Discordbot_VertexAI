@@ -1,7 +1,7 @@
 ## Gemini Discord Bot Using Google VertexAI
 
 ## Introduction
-This project is a Discord Bot that utilizes Google VertexAI to call upon Gemini Pro for generating text based on user messages, including various file formats like images, PDFs, movies, and audio files.  It's designed to enhance Discord servers by providing AI-powered responses and content. 
+This project is a Discord Bot that utilizes Google VertexAI to call upon Gemini Pro for generating text based on user messages, including various file formats like images, PDFs, video, and audio files.  It's designed to enhance Discord servers by providing AI-powered responses and content. 
 
 This bot can also process text files exceeding Discord's message length limit, making it ideal for questions about source code or other lengthy texts.
 
@@ -11,6 +11,9 @@ This bot can also process text files exceeding Discord's message length limit, m
 - Accepts file input for processing text beyond Discord's character limit, such as source code.
 - Customizable through environment variables
 - Easy to set up and deploy on any server
+- Automatically remembers conversation history, including file inputs, to provide context for future interactions.
+- Use the reset command to clear the conversation history. Case insensitive.
+
 
 ## Supported Input Formats
 The bot supports a wide range of input formats, including:
@@ -44,6 +47,10 @@ To run this project, you must add the following environment variables to your .e
 To run the bot, use the following command:
 ```
 python GeminiDiscordBot.py
+```
+To clear the conversation history, send the following command to the bot:
+```
+reset
 ```
 
 ## Contributions
