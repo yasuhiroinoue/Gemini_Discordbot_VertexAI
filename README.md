@@ -58,12 +58,15 @@ Want to tweak things even further? Go for it!  You can customize the bot's behav
 Go ahead, get creative, and make this bot your own!
 
 ## Running the Bot
-Time to unleash the AI! To run the bot, just use this command:
+
+### 1. Start the Bot (On your server)
+To start the bot on your server, open your terminal and run this command:
 ```
 python GeminiDiscordBot.py
 ```
 
-Want to give the bot a fresh start?  Use this command to clear its memory of past conversations:
+### 2. Reset Conversation History (Within Discord)
+Want to give the bot a fresh start?  Send this command in a Discord channel where the bot is active:
 ```
 reset
 ```
