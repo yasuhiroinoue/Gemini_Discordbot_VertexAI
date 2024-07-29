@@ -13,6 +13,7 @@ Want to supercharge your Discord server with the mind-blowing power of Google's 
 - **Text generation using Gemini Pro:**  Unleash your creativity and write stories, poems, scripts, musical pieces, emails, letters, and anything else you can dream up!
 - **Handles various input formats (using Gemini 1.5 Pro):** Let the bot analyze images, extract text from PDFs, transcribe audio, and more.
 - **Accepts file input for processing text beyond Discord's character limit:** Have a super long code snippet you need help with?  No problem! This bot can handle it.
+- **Image generation from text prompts:** Create stunning visuals based on descriptive text.
    
 
 ## Supported Input Formats
@@ -37,6 +38,7 @@ Ready to get started? It's easy!
 1. Clone this repository to your local machine or server.
 2. Install the required dependencies by running `pip install -r requirements.txt`.
 3. Create a `.env` file in the root directory of the project and populate it with your environment variables as described below.
+4. **For image generation**, ensure that the appropriate libraries and APIs (Imagen are enabled and configured in your GCP project.
 
 ## Technical Details
 This bot is built for flexibility! It uses the `gemini-1.5-pro-001` version of Google's Gemini Pro model by default, but you can easily switch to a different version (check out the `MODEL_ID` in `GeminiDiscordBot.py`). Oh, and by the way, this README.md?  Yeah, Gemini 1.5 Pro helped write this too! 
@@ -55,7 +57,15 @@ Want to tweak things even further? Go for it!  You can customize the bot's behav
 * **Modify the text generation parameters:** Play around with settings like `temperature` and `top_p` to change how creative and coherent the generated text is.
 *  **Integrate additional commands:**  Add your own custom commands to make the bot even more powerful!
 
-Go ahead, get creative, and make this bot your own!
+## Using Image Generation
+To generate images based on text prompts, use the following command in your Discord server:
+
+```
+!generate <your_text_prompt> | <aspect_ratio>
+```
+
+Replace `<your_text_prompt>` with a description of the image you want to create and `<aspect_ratio>` with the desired aspect ratio (e.g., `16:9`, `4:3`). The bot will respond with the generated image based on the provided text prompt and aspect ratio.
+
 
 ## Running the Bot
 
