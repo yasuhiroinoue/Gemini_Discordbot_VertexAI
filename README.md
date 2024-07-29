@@ -38,7 +38,7 @@ Ready to get started? It's easy!
 1. Clone this repository to your local machine or server.
 2. Install the required dependencies by running `pip install -r requirements.txt`.
 3. Create a `.env` file in the root directory of the project and populate it with your environment variables as described below.
-4. **For image generation**, ensure that the appropriate libraries and APIs (Imagen are enabled and configured in your GCP project.
+4. **For image generation**, ensure that the appropriate libraries and APIs (Imagen2) are enabled and configured in your GCP project.
 
 ## Technical Details
 This bot is built for flexibility! It uses the `gemini-1.5-pro-001` version of Google's Gemini Pro model by default, but you can easily switch to a different version (check out the `MODEL_ID` in `GeminiDiscordBot.py`). Oh, and by the way, this README.md?  Yeah, Gemini 1.5 Pro helped write this too! 
