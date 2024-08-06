@@ -1,0 +1,9 @@
+# Discord Bot Token
+DISCORD_BOT_TOKEN=YOUR_DISCORD_BOT_TOKEN
+
+# GCP Settings
+GCP_REGION=YOUR_GCP_REGION
+GCP_PROJECT_ID=YOUR_GCP_PROJECT_ID
+
+# Image Commands Feature Flag
+IMG_COMMANDS_ENABLED=FALSE #or True for enabled Imagen3
