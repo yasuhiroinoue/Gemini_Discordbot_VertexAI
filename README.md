@@ -49,7 +49,7 @@ To get this bot up and running, you'll need to add these environment variables t
 - `GCP_REGION` - Your Google Cloud Platform region
 - `GCP_PROJECT_ID` - Your Google Cloud Platform project ID
 - `DISCORD_BOT_TOKEN` - Your Discord Bot Token
-- `IMG_COMMANDS_ENABLED`  # True or False to disable !img and !fimg commands
+- `IMG_COMMANDS_ENABLED`  # True to enable, or False to disable !img and !fimg commands
 
 ### Other Customization Options
 Want to tweak things even further? Go for it!  You can customize the bot's behavior by exploring the source code. For example:
