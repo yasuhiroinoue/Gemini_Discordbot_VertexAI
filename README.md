@@ -38,7 +38,7 @@ Ready to get started? It's easy!
 1. Clone this repository to your local machine or server.
 2. Install the required dependencies by running `pip install -r requirements.txt`.
 3. Create a `.env` file in the root directory of the project and populate it with your environment variables as described below.
-4. **For image generation**, ensure that the appropriate libraries and APIs (`Imagen2`) are enabled and configured in your GCP project.
+4. **For image generation**, ensure that the appropriate libraries and APIs (`Imagen3`) are enabled and configured in your GCP project.
 
 ## Technical Details
 This bot is built for flexibility! It uses the `gemini-1.5-pro-001` version of Google's Gemini Pro model by default, but you can easily switch to a different version (check out the `MODEL_ID` in `GeminiDiscordBot.py`). Oh, and by the way, this README.md?  Yeah, Gemini 1.5 Pro helped write this too! 
@@ -60,11 +60,19 @@ Want to tweak things even further? Go for it!  You can customize the bot's behav
 ## Using Image Generation
 To generate images based on text prompts, use the following command in your Discord server:
 
+**For standard image generation:** 
 ```
-!generate <your_text_prompt> | <aspect_ratio>
+!img <prompt> | <negative_prompt> | <aspect_ratio>
 ```
 
-Replace `<your_text_prompt>` with a description of the image you want to create and `<aspect_ratio>` with the desired aspect ratio (e.g., `16:9`, `4:3`). The bot will respond with the generated image based on the provided text prompt and aspect ratio.
+**For faster image generation:** 
+```
+!fimg <prompt> | <negative_prompt> | <aspect_ratio>
+```
+
+Replace `<prompt>` with a description of the image you want to create, `<negative prompt>` with a description of things you *don't* want in the image, and `<aspect_ratio>` with the desired aspect ratio (e.g., `16:9`, `4:3`). The bot will respond with the generated image based on the provided text prompts and aspect ratio.
+
+**Note:** The `!fimg` command uses a faster model that may have slightly lower image quality compared to the `!img` command. 
 
 
 ## Running the Bot
