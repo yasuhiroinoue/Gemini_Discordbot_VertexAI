@@ -19,7 +19,9 @@ load_dotenv()
 GCP_REGION = os.getenv("GCP_REGION")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-# The history is counted by the number of pairs of exchanges between the user and the assistant.
+
+# Load the environment variable for enabling/disabling commands
+IMG_COMMANDS_ENABLED = os.getenv('IMG_COMMANDS_ENABLED', 'True').lower() == 'true'
 
 # The maximum number of characters per Discord message
 MAX_DISCORD_LENGTH = 2000
@@ -134,6 +136,10 @@ async def handle_generation(ctx, model, prompt, negative_prompt, aspect_ratio):
 
 @bot.command(name='fimg')
 async def generate_fast(ctx, *, args):
+    if not IMG_COMMANDS_ENABLED:
+        await ctx.send("The feature is currently disabled")
+        return
+
     try:
         await ctx.message.add_reaction('🎨')
         prompt, negative_prompt, aspect_ratio = await parse_args(args)
@@ -144,6 +150,10 @@ async def generate_fast(ctx, *, args):
 
 @bot.command(name='img')
 async def generate(ctx, *, args):
+    if not IMG_COMMANDS_ENABLED:
+        await ctx.send("The feature is currently disabled")
+        return
+    
     try:
         await ctx.message.add_reaction('🎨')
         prompt, negative_prompt, aspect_ratio = await parse_args(args)
