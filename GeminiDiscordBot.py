@@ -1,4 +1,4 @@
-﻿# Gemini DiscordBot using vertexai
+﻿# Gemini DiscordBot using GeminiAPI
 import os
 import re
 import aiohttp
@@ -8,180 +8,98 @@ import magic
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-import vertexai
-from vertexai import generative_models
-from vertexai.generative_models import Part
-from vertexai.preview.vision_models import ImageGenerationModel
+from google import genai
+from google.genai import types
 
+# Dictionary to store chat sessions
 chat = {}
 
+# Load environment variables
 load_dotenv()
-GCP_REGION = os.getenv("GCP_REGION")
-GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+# Google AI (API KEY)
+GOOGLE_AI_KEY = os.getenv("GOOGLE_AI_KEY")
 
-# Load the environment variable for enabling/disabling commands
-IMG_COMMANDS_ENABLED = os.getenv('IMG_COMMANDS_ENABLED', 'True').lower() == 'true'
+# VertexAI
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+GCP_REGION = os.getenv("GCP_REGION")
 
 # The maximum number of characters per Discord message
 MAX_DISCORD_LENGTH = 2000
-#---------------------------------------------AI Configuration-------------------------------------------------
 
 # Configure the generative AI model
-text_generation_config = {
-    "temperature": 1,
-    "top_p": 0.95,
-    # "top_k": 1,
-    "max_output_tokens": 8192,
-}
+# text_generation_config = {
+#     "temperature": 1,
+#     "top_p": 0.95,
+#     "max_output_tokens": 8192,
+# }
 
-safety_config = {
-        generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-}
+# safety_settings = [
+#     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+#     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+#     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+#     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
+# ]
 
-# Initialize Vertex AI
-MODEL_ID="gemini-1.5-pro-001"
-MODEL_TRANSLATE="gemini-1.5-flash-001"
-IMAGEN_MODEL="imagen-3.0-generate-001"
-IMAGEN_MODEL_FAST="imagen-3.0-fast-generate-001"
+# Tool to support Google Search in Model
+tools = [
+    types.Tool(google_search=types.GoogleSearch())
+]
 
-vertexai.init(project=GCP_PROJECT_ID, location=GCP_REGION)
+generate_content_config = types.GenerateContentConfig(
+    temperature = 1,
+    top_p = 0.95,
+    max_output_tokens = 8192,
+    response_modalities = ["TEXT"],
+    safety_settings = [types.SafetySetting(
+      category="HARM_CATEGORY_HATE_SPEECH",
+      threshold="OFF"
+    ),types.SafetySetting(
+      category="HARM_CATEGORY_DANGEROUS_CONTENT",
+      threshold="OFF"
+    ),types.SafetySetting(
+      category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+      threshold="OFF"
+    ),types.SafetySetting(
+      category="HARM_CATEGORY_HARASSMENT",
+      threshold="OFF"
+    )],
+    tools = tools,
+  )
+MODEL_ID = "gemini-2.0-flash-exp"
 
-# Load the model
-chat_model =  generative_models.GenerativeModel(model_name=MODEL_ID, generation_config=text_generation_config,safety_settings=safety_config,)
+# Initialize Google AI via API_KEY
+# genai.configure(api_key=GOOGLE_AI_KEY)
 
-
-# Translate model
-translate_model = generative_models.GenerativeModel(
-    model_name=MODEL_TRANSLATE,
-    system_instruction=[
-        "You are a helpful language translator.",
-        "Your mission is to translate text in non-English languages to English.",
-        "If the input text is already in English, return it unchanged.",
-        "The input text is passed to an image generation bot.",
-    ],
-    generation_config=text_generation_config,
-    safety_settings=safety_config,
+# Only run this block for Vertex AI API
+chat_model = genai.Client(
+    vertexai=True, project=GCP_PROJECT_ID, location=GCP_REGION
 )
 
-# Generate Image
-async def generate_image(model, prompt, negative_prompt, aspect_ratio):
-# Reference
-# https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/imagen-api
-
-    model = ImageGenerationModel.from_pretrained(model)
-        
-    images = model.generate_images(
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        number_of_images=1,
-        language="en",
-        aspect_ratio=aspect_ratio,
-        safety_filter_level="block_few",
-        person_generation="allow_all",
-        
-    )
-    
-    return images[0]
-
-
-#---------------------------------------------Discord Code-------------------------------------------------
 # Initialize Discord bot
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
-
 @bot.event
 async def on_ready():
+    """Triggered when the bot has successfully connected."""
     print("----------------------------------------")
     print(f'Gemini Bot Logged in as {bot.user}')
     print("----------------------------------------")
 
-async def parse_args(args):
-    parts = [part.strip() for part in args.split('|')]
-    prompt = parts[0] if len(parts) > 0 else ""
-    negative_prompt = ""
-    aspect_ratio = "16:9"
-    if len(parts) > 1:
-        if re.match(r'^\d+:\d+$', parts[1]):
-            aspect_ratio = parts[1]
-        else:
-            negative_prompt = parts[1]
-    if len(parts) > 2:
-        aspect_ratio = parts[2]
-    return prompt, negative_prompt, aspect_ratio
-
-async def handle_generation(ctx, model, prompt, negative_prompt, aspect_ratio):
-    try:
-        image = await generate_image(model, prompt, negative_prompt, aspect_ratio)
-        with io.BytesIO(image._image_bytes) as image_binary:
-            file = discord.File(image_binary, filename="generated_image.png")
-            await ctx.send(file=file)
-        if image.generation_parameters:
-            params = "\n".join([f"{k}: {v}" for k, v in image.generation_parameters.items()])
-            await ctx.send(f"Generation parameters:\n```\n{params}\n```")
-
-        file_data = image._image_bytes
-        mime_type = get_mime_type_from_bytes(file_data)
-        prompt_message = f"This image was generated by prompt: {prompt}; negative prompt: {negative_prompt}."
-        response_text = await generate_response_with_file_and_text(ctx, file_data, prompt_message, mime_type)
-        await split_and_send_messages(ctx, response_text, MAX_DISCORD_LENGTH)
-    except ValueError as ve:
-        await ctx.send(f"Invalid input provided for image generation: {str(ve)}")
-    except Exception as e:
-        await ctx.send(f"Failed to generate image: {str(e)}")
-
-@bot.command(name='fimg')
-async def generate_fast(ctx, *, args):
-    if not IMG_COMMANDS_ENABLED:
-        await ctx.send("The feature is currently disabled")
-        return
-
-    try:
-        await ctx.message.add_reaction('🎨')
-        prompt, negative_prompt, aspect_ratio = await parse_args(args)
-        await ctx.send(f"Prompt: {prompt}\nNegative Prompt: {negative_prompt}\nAspect Ratio: {aspect_ratio}")
-        await handle_generation(ctx, IMAGEN_MODEL_FAST, prompt, negative_prompt, aspect_ratio)
-    except Exception as e:
-        await ctx.send(f"An error occurred: {str(e)}")
-
-@bot.command(name='img')
-async def generate(ctx, *, args):
-    if not IMG_COMMANDS_ENABLED:
-        await ctx.send("The feature is currently disabled")
-        return
-    
-    try:
-        await ctx.message.add_reaction('🎨')
-        prompt, negative_prompt, aspect_ratio = await parse_args(args)
-        await ctx.send(f"Prompt: {prompt}\nNegative Prompt: {negative_prompt}\nAspect Ratio: {aspect_ratio}")
-        await handle_generation(ctx, IMAGEN_MODEL, prompt, negative_prompt, aspect_ratio)
-    except Exception as e:
-        await ctx.send(f"An error occurred: {str(e)}")
-
-#On Message Function
 @bot.event
 async def on_message(message):
+    """Handle incoming messages."""
     if message.author == bot.user:
         return
 
+    # Respond when mentioned or in DMs
     if message.mention_everyone:
         await message.channel.send(f'This is {bot.user}')
         return
 
-    if message.content.startswith('!img'):
-        await bot.process_commands(message)
-        # For debug
-        # print(message.content)
-        # print(clean_discord_message(message.content))
-        #
-    elif message.content.startswith('!fimg'):
-        await bot.process_commands(message)
-
-    elif bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
+    if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
         cleaned_text = clean_discord_message(message.content)
         async with message.channel.typing():
             if message.attachments:
@@ -191,12 +109,16 @@ async def on_message(message):
 
 
 def get_mime_type_from_bytes(byte_data):
+    """Determine the MIME type of a given byte array."""
     mime = magic.Magic(mime=True)
     mime_type = mime.from_buffer(byte_data)
-   
+    # Replace unsupported MIME types starting with 'text/' with 'text/plain'
+    if mime_type.startswith('text/'):
+        mime_type = 'text/plain'
     return mime_type
 
 async def process_attachments(message, cleaned_text):
+    """Process message attachments and generate responses."""
     for attachment in message.attachments:
         await message.add_reaction('📄')
         try:
@@ -206,10 +128,7 @@ async def process_attachments(message, cleaned_text):
                         await message.channel.send('Unable to download the file.')
                         return
                     file_data = await resp.read()
-                    
                     mime_type = get_mime_type_from_bytes(file_data)
-                    # For debug
-                    # print(mime_type)
                     response_text = await generate_response_with_file_and_text(message, file_data, cleaned_text, mime_type)
                     await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
                     return
@@ -218,52 +137,39 @@ async def process_attachments(message, cleaned_text):
         except Exception as e:
             await message.channel.send(f'An unexpected error occurred: {e}')
 
-
 async def async_send_message(chat_session, prompt): 
+    """Send a message asynchronously using a chat session."""
     loop = asyncio.get_running_loop()
-
     try:
-        # Use ThreadPoolExecutor to run synchronous function asynchronously
         response = await loop.run_in_executor(None, chat_session.send_message, prompt)
         return response
     except Exception as e:
-        # Handle any exceptions that occur
         print(f"Error sending message: {e}")
-        # Return an appropriate response based on the error, or None to let the caller handle it
         return None
-    
+
 async def process_text_message(message, cleaned_text):
     """Processes a text message and generates a response using a chat model."""
-    
-    # For debug
-    # print(f"New Message FROM: {message.author.id}: {cleaned_text}")
-
-    # Handle reset command
     if re.search(r'^RESET$', cleaned_text, re.IGNORECASE):
         chat.pop(message.author.id, None)
         await message.channel.send(f"🧹 History Reset for user: {message.author.name}")
         return
 
     await message.add_reaction('💬')
-
-    # Send response, splitting if necessary
-    response_text = await generate_response_with_text(message,cleaned_text)
+    response_text = await generate_response_with_text(message, cleaned_text)
     await split_and_send_messages(message, response_text, MAX_DISCORD_LENGTH)
 
 async def generate_response_with_text(message, cleaned_text):
+    """Generate a response based on the provided text input."""
     global chat
     user_id = message.author.id
-    # For debug
-    # print(user_id)
-
-    # Get or create chat session
     chat_session = chat.get(user_id)
     if not chat_session:
-        chat_session = chat_model.start_chat()
+        chat_session = chat_model.chats.create(
+            model=MODEL_ID,
+            config=generate_content_config,
+        )
         chat[user_id] = chat_session
-    
     try:
-        # Generate response using the asynchronous send_message function
         answer = await async_send_message(chat_session, cleaned_text)
         if answer.candidates and answer.candidates[0].content.parts:
             return answer.candidates[0].content.parts[0].text
@@ -274,28 +180,26 @@ async def generate_response_with_text(message, cleaned_text):
         return "An error occurred while generating the response."
 
 async def generate_response_with_file_and_text(message, file, text, _mime_type):
-    # Construct image and text parts with Part class
-    file_part = Part.from_data(data=file, mime_type=_mime_type)
-    text_part = Part.from_text(text=f"\n{text if text else 'What is this?'}")
-    # Stored in list as prompt
-    prompt_parts = [file_part, text_part]
-
+    """Generate a response based on the provided file and text input."""
     global chat
     user_id = message.author.id
-
-    # For debug
-    # print(user_id)
-
-    # Get or create chat session
     chat_session = chat.get(user_id)
-
     if not chat_session:
-        chat_session = chat_model.start_chat()
+        chat_session = chat_model.chats.create(
+            model=MODEL_ID,
+            config=generate_content_config,
+        )
         chat[user_id] = chat_session
-    
     try:
-        # Generate response using the asynchronous send_message function
+        # file_like_object = io.BytesIO(file)
+ 
+        text_part = f"\n{text if text else 'What is this?'}"
+        file_byte = types.Part.from_bytes(data=file, mime_type=_mime_type)
+        prompt_parts = [text_part, file_byte]
+
+
         answer = await async_send_message(chat_session, prompt_parts)
+
         if answer.candidates and answer.candidates[0].content.parts:
             return answer.candidates[0].content.parts[0].text
         else:
@@ -305,41 +209,27 @@ async def generate_response_with_file_and_text(message, file, text, _mime_type):
         return "An error occurred while generating the response."
 
 def clean_discord_message(input_string):
+    """Remove special characters and Discord mentions from the message."""
     bracket_pattern = re.compile(r'<[^>]+>')
     return bracket_pattern.sub('', input_string)
 
 async def split_and_send_messages(message_system, text, max_length):
-    """
-    Splits the given text into chunks that respect word boundaries and sends them
-    using the provided message system. Chunks are up to max_length characters long.
-
-    :param message_system: An object representing the Discord messaging system,
-                           assumed to have a `channel.send` method for sending messages.
-    :param text: The text to be sent.
-    :param max_length: The maximum length of each message chunk.
-    """
+    """Split the message into chunks and send them, respecting the maximum length."""
     start = 0
     while start < len(text):
-        # If remaining text is within the max_length, send it as one chunk.
         if len(text) - start <= max_length:
             await message_system.channel.send(text[start:])
             break
 
-        # Find the last whitespace character before the max_length limit.
         end = start + max_length
         while end > start and text[end-1] not in ' \n\r\t':
             end -= 1
 
-        # If no suitable whitespace is found, force break at max_length.
         if end == start:
             end = start + max_length
 
-        # Send the text from start to end.
         await message_system.channel.send(text[start:end].strip())
-        
-        # Update start position for next iteration to continue after the last whitespace.
         start = end
 
 # Run the bot
 bot.run(DISCORD_BOT_TOKEN)
-
